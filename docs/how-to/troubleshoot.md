@@ -67,18 +67,36 @@ take time to initialize; inspect its indexing error and retry `deploy` once the
 underlying cause is fixed. There is no automatic retry loop that repeatedly
 spends AI credits.
 
-If `verify-runtime` cannot find a structured identity result or matching query
-history, stop the question evaluation and inspect the raw answer. Do not infer
-the agent's execution role from its prose or from the client's selected role.
-The probe includes a corpus-wide count to activate analytical routing; a standalone
-session-details question can stay on the ordinary search route without a SQL tool.
+If `verify-runtime` cannot confirm the native context aggregate and matching
+query history, stop analytical evaluation and inspect the saved answer. The probe
+reads only its same-run Search `RESULT_SCAN`; it does not request base-table
+inventory or a separate session-only query. Do not infer execution context from
+the agent's prose or from the client connection alone.
+
+A successful tool response may omit `resultSetMetaData.rowType`. The verifier
+uses the cached native query result through same-user `RESULT_SCAN` to obtain
+column names. It never guesses positional columns or reruns AI SQL. Unknown or
+missing secondary-role context fails verification.
+
+For a UI/API discrepancy, compare the same LIVE specification and question.
+The stored default version can differ from Studio's LIVE draft. Snowflake documents
+an explicit [versioned REST endpoint](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-versioning)
+and [role/warehouse request headers](https://docs.snowflake.com/en/developer-guide/snowflake-rest-api/setting-context).
+Check the actual child queries, not just those requested settings. Preserve raw
+JSON or streaming events privately; do not replay an ambiguously completed request
+automatically. In the recorded comparison, both REST modes remained Search-only.
+
+Do not add an undocumented `base_table` field, spoof Studio as the request origin,
+or broaden permissions to force a pass. See the current
+[execution-path results](../reference/capabilities.md#native-analytical-execution).
 
 ## An answer is missing or suspicious
 
 Inspect the newest `~/.local/state/snow-analytical-search/answers/` file. It includes raw response content,
 annotations, tool results, elapsed time, and query ID. Errors, warnings, empty answers and interrupted completion statuses fail
 the command. SQL exceptions during an agent call are also
-preserved. A failure before the connection is established may produce only the
+preserved. Raw responses are saved before parsing; malformed content records a
+`parse_error` without discarding the original. A failure before the connection is established may produce only the
 command-level diagnostic.
 
 For counts, compare against the manifest and check `COUNT(DISTINCT DOC_ID)`.

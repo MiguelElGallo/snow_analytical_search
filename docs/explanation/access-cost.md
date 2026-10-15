@@ -18,11 +18,22 @@ such as “use only the project database” are not a security boundary.
 
 [Cortex authorization](https://docs.snowflake.com/en/user-guide/snowflake-cortex/cortex-agents-setup)
 depends on the request context. The SQL helper's downstream execution context
-must be demonstrated for your deployment. `verify-runtime` requests a native
-identity query and checks its results against query history; a mismatch stops
-evaluation. If the runtime does not expose its implicit SQL tool, the gate fails even
-when AI functions and ordinary search work. Client context and
-downstream native SQL context remain distinct claims.
+must be demonstrated for your deployment. `verify-runtime` requests a bounded
+Search-to-SQL aggregate that projects the actual context functions. It checks
+same-user query history and independently reads that query's cached result.
+A mismatch or unknown secondary-role state stops evaluation.
+
+Each later evaluation call is audited separately for actual user, primary role,
+warehouse, successful execution, SQL text and run timestamps. A previous probe
+does not certify a later call's secondary roles. Those remain explicitly
+unverified unless that call supplies its own context evidence. Information Schema
+query history does not provide secondary-role statistics; account-wide history
+has different access requirements and can lag. The demo does not add monitoring
+grants to conceal that gap.
+
+If the runtime does not expose its implicit SQL tool, the gate fails even when
+AI functions and ordinary Search work. Client context, a bounded Studio success,
+and full programmatic analytical acceptance remain distinct claims.
 
 The demo reports the current cross-region inference setting without changing
 it or other account-wide model settings. Review your region and data-handling

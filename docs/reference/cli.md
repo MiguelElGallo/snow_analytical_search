@@ -34,8 +34,8 @@ Prefix each command below with `uv run sas`.
 | `check-ai` | Two small calls: AI_FILTER and AI_COMPLETE; save success or failure | RUNNER |
 | `deploy` | Create versioned multi-index Search; verify corpus; create/update agent | OWNER and RUNNER |
 | `verify --corpus-only` | Check the corpus without querying Search | OWNER |
-| `verify` | Check corpus and retrieve every source from Search | OWNER and RUNNER |
-| `verify-runtime` | Ask native agent for SQL identity; check results and query history | RUNNER |
+| `verify` | Check corpus, reconcile every indexed chunk, and retrieve every source from Search | OWNER and RUNNER |
+| `verify-runtime` | Verify a bounded Search → native SQL context aggregate against history and cached results | RUNNER |
 | `ask "QUESTION"` | Run the stored agent and save the response | RUNNER |
 | `evaluate` | Verify runtime context, then ask the six evaluation questions | RUNNER |
 | `pause` | Suspend current Search indexing/serving if present, then warehouse | OWNER |

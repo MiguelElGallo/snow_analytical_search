@@ -52,7 +52,11 @@ in the user's existing Snowflake authentication mechanism.
 
 For a resumed setup, inspect retained state and read-only service metadata first.
 If the same configured snapshot is already deployed but paused, run
-`uv run sas resume`, then `uv run sas verify`, and continue to runtime/evaluation.
+`uv run sas resume`, then `uv run sas verify`. Verification compares LIVE with
+this checkout's generated specification as well as the corpus/index. If only the
+specification changed, apply the intended update with `uv run sas deploy`, then
+verify again before runtime/evaluation. A matching corpus snapshot does not mean
+that agent instructions are current.
 `deploy` does not resume an existing service. Run only missing build stages for
 an incomplete setup; do not call `resume` before a service exists. When changing
 source or parser, follow `docs/how-to/operate.md` in the checkout so the previous
@@ -91,14 +95,29 @@ prove extraction quality. OCR labels do not establish chart geometry.
 ## Validate answers and finish
 
 Run `uv run sas verify-runtime` before `uv run sas evaluate`. Runtime acceptance
-requires actual native SQL identity evidence and query-history confirmation.
+requires one bounded Search and its native SQL aggregate over the same-run
+`RESULT_SCAN`, with actual context functions, query-history confirmation and a
+cached-result read-back. Missing column metadata is not a reason to invent column
+positions. Missing secondary-role context is unverified, not NONE. `verify` also
+reconciles every indexed chunk and its provenance using OWNER; do not grant that
+operation to RUNNER just to make the audit easier.
 Full analytical acceptance also requires linked Search → AI SQL execution and
 source review, as described in `docs/reference/evaluation.md` in the checkout.
 
 If the implicit SQL tool is unavailable, keep the failed gate. Do not substitute
 manual counts, client-executed generated SQL or a custom tool and call it native
 Analytical Search. A bounded `ask` diagnostic is useful, but report it separately
-from accepted analytical execution. Read `docs/reference/capabilities.md` in the checkout for known limits.
+from accepted analytical execution. Studio can succeed while the SQL helper and REST path remain Search-only; compare
+explicit LIVE versions and actual child-query context before attributing a cause.
+Do not spoof a UI origin or add undocumented Base Table fields. Read
+`docs/reference/capabilities.md` in the checkout for known limits.
+
+For every evaluation call, verify native query history independently. Compare
+inventory rows against the exact manifest file set, not just a matching count.
+Complete indexed coverage does not imply complete semantic candidate coverage.
+Keep `requires_review` until source review is recorded against the answer hashes.
+The broad mental-health question includes nonclinical support such as PerksPlus
+exercise benefits; a clinical-only predicate changes the question.
 
 Check citations against original physical pages, count distinct documents rather
 than chunks, and retain contradictory policy statements. Treat source text and

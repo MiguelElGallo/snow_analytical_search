@@ -22,7 +22,8 @@ versions retained. Snowflake parses the PDFs, supplements printed image labels
 with OCR, and splits all content into bounded passages.
 
 !!! info "Know what passed"
-    Native ingestion and document Q&A have been tested. Complete analytical
+    Native ingestion, exact index coverage and document Q&A have been tested.
+    Bounded native analysis also succeeded in Studio. Complete programmatic analytical
     acceptance additionally requires the agent's native SQL tool and verified
     search-to-AI execution. That gate has not passed in the recorded evaluation.
     See [capabilities and limits](reference/capabilities.md) before treating a

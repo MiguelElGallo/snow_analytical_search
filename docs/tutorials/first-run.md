@@ -106,8 +106,11 @@ uv run sas verify-runtime
 
 Deployment creates a multi-index Cortex Search service, checks all 13 sources,
 then creates or updates the Cortex Agent. It reads back the agent configuration
-and source-row count. `verify-runtime` asks the native agent to run an identity
-query and checks the downstream role and warehouse against query history.
+and source-row count. `verify` also compares every indexed chunk's content and
+provenance with the corpus. `verify-runtime` requests one Search of at most ten
+passages, then a native SQL aggregate over that exact Search result. The same
+query projects the actual user, role, secondary roles and warehouse. The verifier
+checks query history and reads the cached result; it does not execute model SQL.
 
 !!! warning "Live validation boundary"
     If `verify-runtime` reports that the native SQL tool is unavailable, stop
@@ -125,7 +128,8 @@ Inspect the answer and its citations. The company overview lists Standard,
 Senior, and Executive tiers lasting 2, 4, and 6 weeks respectively. This is an
 answer observed in the live diagnostic run and checked against the source.
 
-Run the broader evaluation:
+After `verify-runtime` passes, run the broader evaluation. If it failed, keep
+that result, use individual questions only for diagnostics, then pause:
 
 ```bash
 uv run sas evaluate
