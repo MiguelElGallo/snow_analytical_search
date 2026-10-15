@@ -5,6 +5,8 @@ Source: [Azure sample data at the pinned commit](https://github.com/Azure-Sample
 Commit: `558ffd397eddcfe4da5c85ebc285796b367eb9b2`.
 Default native snapshot: `8f805241c0e87c37f920ab29` (LAYOUT + filtered OCR + native splitter).
 See [capabilities and limits](capabilities.md) for content checks.
+See [the ingestion diagrams](../explanation/ingestion.md) for how each file type
+becomes pages and chunks.
 
 ## Complete inventory
 
