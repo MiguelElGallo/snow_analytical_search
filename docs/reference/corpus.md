@@ -8,6 +8,17 @@ See [capabilities and limits](capabilities.md) for content checks.
 See [the ingestion diagrams](../explanation/ingestion.md) for how each file type
 becomes pages and chunks.
 
+## Source attribution
+
+The source repository is
+[Azure-Samples/azure-search-openai-demo](https://github.com/Azure-Samples/azure-search-openai-demo).
+Its MIT license states **Copyright (c) 2023 Azure Samples**. Its README also
+includes a separate Microsoft notice for the generated PDF documents.
+[Third-party notices](https://github.com/MiguelElGallo/snow_analytical_search/blob/main/THIRD_PARTY_NOTICES.md)
+reproduces both texts with links to the pinned originals. Preserve the source
+documents and their individual notices when sharing them. The downloader saves
+the upstream license as `UPSTREAM_LICENSE` alongside the local corpus.
+
 ## Complete inventory
 
 Paths are relative to the upstream `data/` directory. The loader includes nested
