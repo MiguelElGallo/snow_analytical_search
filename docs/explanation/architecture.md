@@ -74,16 +74,45 @@ actual evidence, including physical page numbers, layout, and diagrams.
 Stage-relative paths support source-file citations, while public URLs point to
 the exact Git commit.
 
-The default pipeline uses native `AI_PARSE_DOCUMENT` with layout and page
-splitting, then `SNOWFLAKE.CORTEX.SPLIT_TEXT_RECURSIVE_CHARACTER`. PDF layout
-output and Markdown use Markdown boundaries; JSON uses ordinary text boundaries.
+## How the native rebuild preserves page references
+
+The native rebuild uses **`AI_PARSE_DOCUMENT` in `LAYOUT` mode for the seven PDFs**
+and **Snowflake's recursive splitter for all 13 files**, preserving page references
+throughout ingestion. This is the default pipeline, selected by
+`pdf_parser="snowflake"`.
+
+| Files in the pinned corpus | Text prepared for chunking | Page reference |
+| --- | --- | --- |
+| 7 PDFs | `AI_PARSE_DOCUMENT` with `{'mode':'LAYOUT', 'page_split':true}` | One record per physical PDF page |
+| 5 JSON files | Read as UTF-8 and formatted as indented JSON text | Logical page 1 for each file |
+| 1 Markdown file | Read as UTF-8 Markdown text | Logical page 1 for the file |
+
+LAYOUT extracts text and structure, including tables, into Markdown. Setting
+`page_split=true` keeps PDF pages separate. Snowflake returns zero-based page
+indices; the loader adds one to store physical page numbers starting at 1.
+These count cover pages and may differ from printed page labels. See the
+[AI_PARSE_DOCUMENT reference](https://docs.snowflake.com/en/sql-reference/functions/ai_parse_document)
+for the parsing options and output format.
+
+Next, `SNOWFLAKE.CORTEX.SPLIT_TEXT_RECURSIVE_CHARACTER` splits the prepared text
+for **every file**, including JSON and Markdown. It uses Markdown boundaries for
+PDF layout output and Markdown files, and ordinary text boundaries for JSON.
+The [recursive splitter](https://docs.snowflake.com/en/sql-reference/functions/split_text_recursive_character-snowflake-cortex)
+tries progressively smaller text boundaries until chunks fit the configured
+limit: 3,500 characters, with up to 300 characters of overlap.
+
+The loader passes each physical or logical page to the splitter separately, so a
+chunk never joins text from two PDF pages. It stores the page number with every
+chunk, together with the document ID, source path, source URL, source commit and
+file hash. For example, chunks from `Benefit_Options.pdf` physical page 4 all
+retain that source path and `PAGE_NUMBER=4`, even if the page needs several
+chunks. This lets retrieved passages be traced back to the original page.
+
 When layout output contains an image reference, a second native OCR call processes
 only those page indices. The composite keeps the layout view unchanged and
-appends labelled printed text/labels from OCR. Raw inputs, query IDs and hashes
-remain separate; the snapshot includes this enrichment policy.
-
-Each chunk stays within a physical page, with a maximum of 3,500 characters and
-up to 300 characters of overlap. Raw native output and query IDs are retained.
+appends labelled printed text/labels from OCR to the same page before chunking.
+Raw inputs, query IDs and hashes remain separate; the snapshot includes this
+enrichment policy.
 
 The loader validates every chunk and reconstructs each page's complete text,
 ignoring whitespace, to reject omitted content. It does not repair native output
@@ -93,8 +122,9 @@ Tables and extracted chart labels still require source inspection before making
 claims about plotted values or visual relationships.
 
 The historical `local` mode uses pinned pypdf layout extraction and a Python
-splitter. It remains reproducible under its original snapshot identity, but the
-user requested a fresh native rebuild after AI access became available.
+splitter. It remains reproducible under its original snapshot identity. The
+native rebuild uses Snowflake parsing and splitting; local preparation is not
+evidence that this pipeline passed validation.
 
 ## Sample data is evidence, not instructions
 

@@ -67,11 +67,19 @@ uv run sas verify --corpus-only
 
 Setup creates the dedicated database, warehouse, roles, schemas, stage, and
 tables. Ingestion uploads each original, downloads it again to verify its hash,
-then parses PDFs with `AI_PARSE_DOCUMENT` in layout mode, splitting by physical
-page. Pages with image references also receive native OCR to recover printed labels,
-with their physical page association preserved. Snowflake's recursive splitter
-chunks all 13 files. The loader checks full
-text coverage and source provenance before committing each document.
+then runs the native rebuild:
+
+1. Parse all seven PDFs with `AI_PARSE_DOCUMENT` in `LAYOUT` mode and
+   `page_split=true`, retaining each physical page separately. Pages with image
+   references also receive native OCR to recover printed labels on the same page.
+2. Chunk **all 13 files** — seven PDFs, five JSON files and one Markdown file —
+   with `SNOWFLAKE.CORTEX.SPLIT_TEXT_RECURSIVE_CHARACTER`, processing one page at a
+   time. Every chunk retains its source and page number: a one-based physical
+   page for PDFs, or logical page 1 for each JSON/Markdown file.
+
+The loader checks full text coverage and source provenance before committing
+each document. Read [how the native rebuild preserves page references](../explanation/architecture.md#how-the-native-rebuild-preserves-page-references)
+for the file-type handling, chunk limits and a concrete citation example.
 
 For the pinned corpus, expect 13 documents, 279 pages and 13 staged files. The
 chunk count depends on the parser/splitter; the current measured count belongs
