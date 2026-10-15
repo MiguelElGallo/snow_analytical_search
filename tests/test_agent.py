@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+from typing import Any, cast
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -16,7 +17,7 @@ from snow_analytical_search.db import Database
 
 
 def test_summary_rebases_citations_without_mutating_raw_response():
-    response = {
+    response: dict[str, Any] = {
         "content": [
             {"type": "text", "text": "First", "annotations": [{"index": 5, "doc_id": "a"}]},
             {"type": "text", "text": ""},
@@ -54,7 +55,7 @@ def test_analytical_evidence_requires_successful_structured_tool_result():
         ]
     }
     assert not summarize_response(failed)["analytical_sql_observed"]
-    passed = {
+    passed: dict[str, Any] = {
         "content": [
             {
                 "type": "tool_result",
@@ -66,9 +67,15 @@ def test_analytical_evidence_requires_successful_structured_tool_result():
             }
         ]
     }
+    passed["content"].insert(
+        0,
+        {"type": "tool_use", "tool_use": {"name": "system_execute_sql", "tool_use_id": "sql-use"}},
+    )
+    native_result = cast(dict[str, Any], passed["content"][1]["tool_result"])
+    native_result["tool_use_id"] = "sql-use"
     assert summarize_response(passed)["sql_execution_observed"]
     assert not summarize_response(passed)["analytical_sql_observed"]
-    passed["content"][0]["tool_result"]["content"] = [
+    native_result["content"] = [
         {
             "json": {
                 "sql": "SELECT AI_FILTER('mental health', CHUNK) FROM "
@@ -76,7 +83,7 @@ def test_analytical_evidence_requires_successful_structured_tool_result():
             }
         }
     ]
-    assert summarize_response(passed, "DEMO.APP.SERVICE")["analytical_sql_observed"]
+    assert not summarize_response(passed, "DEMO.APP.SERVICE")["analytical_sql_observed"]
     assert not summarize_response(passed, "DEMO.APP.OLD")["analytical_sql_observed"]
 
 
@@ -127,7 +134,7 @@ def test_agent_exposes_native_analytical_capability_and_stage_citations(tmp_path
 
 def test_real_trial_error_envelope_is_a_failure_and_is_preserved(tmp_path, monkeypatch):
     config = Config("test", "ACCT", "DEMO", "a" * 40, tmp_path)
-    response = {"message": "Access denied for trial accounts.", "code": "399504"}
+    response: dict[str, Any] = {"message": "Access denied for trial accounts.", "code": "399504"}
     assert summarize_response(response)["error"] == response["message"]
     db = MagicMock(spec=Database)
     db.__enter__.return_value = db
@@ -147,7 +154,7 @@ def test_real_trial_error_envelope_is_a_failure_and_is_preserved(tmp_path, monke
 @pytest.mark.parametrize("status", [None, "completed", "cancelled", "timed_out", "failed"])
 def test_partial_answer_cannot_hide_interrupted_status(tmp_path, monkeypatch, status):
     config = Config("test", "ACCT", "DEMO", "a" * 40, tmp_path)
-    response = {"content": [{"type": "text", "text": "Some answer text."}]}
+    response: dict[str, Any] = {"content": [{"type": "text", "text": "Some answer text."}]}
     if status is not None:
         response["status"] = status
     db = MagicMock(spec=Database)
@@ -170,7 +177,7 @@ def test_partial_answer_cannot_hide_interrupted_status(tmp_path, monkeypatch, st
 
 @pytest.mark.parametrize("failure", [None, "unverified_binding", "failed_search", "unrelated_sql"])
 def test_persisted_search_analysis_requires_linked_successful_results(failure):
-    response = {
+    response: dict[str, Any] = {
         "content": [
             {
                 "type": "tool_result",
@@ -209,6 +216,23 @@ def test_persisted_search_analysis_requires_linked_successful_results(failure):
             },
         ]
     }
+    for i, block in enumerate(list(response["content"])):
+        result = cast(dict[str, Any], block["tool_result"])
+        result["tool_use_id"] = f"use-{i}"
+    response["content"] = [
+        item
+        for block in response["content"]
+        for item in (
+            {
+                "type": "tool_use",
+                "tool_use": {
+                    "name": cast(dict[str, Any], block["tool_result"])["name"],
+                    "tool_use_id": cast(dict[str, Any], block["tool_result"])["tool_use_id"],
+                },
+            },
+            block,
+        )
+    ]
     result = summarize_response(
         response, "DEMO.APP.SERVICE", "" if failure == "unverified_binding" else "corpus_search"
     )
@@ -231,3 +255,77 @@ def test_deployment_rejects_lost_capability_or_incomplete_index(tmp_path):
     actual["orchestration"]["capabilities"]["analytical_search"] = False
     with pytest.raises(ValueError, match="specification"):
         validate_deployment(config, spec, [{"agent_spec": json.dumps(actual)}], [service], 281)
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        ["unexpected array"],
+        {"content": [{"type": "text", "text": None}]},
+        {
+            "content": [
+                {"type": "tool_use", "tool_use": {"name": "corpus_search", "tool_use_id": "a"}},
+                {
+                    "type": "tool_result",
+                    "tool_result": {
+                        "name": "corpus_search",
+                        "tool_use_id": "a",
+                        "type": "cortex_search",
+                        "status": "success",
+                        "content": [{"json": None}],
+                    },
+                },
+            ]
+        },
+    ],
+)
+def test_malformed_response_is_saved_before_parsing(tmp_path, monkeypatch, response):
+    config = Config("test", "ACCT", "DEMO", "a" * 40, tmp_path)
+    db = MagicMock(spec=Database)
+    db.__enter__.return_value = db
+    db.scalar.return_value = response
+    db.run.return_value = [{"agent_spec": json.dumps(specification(config))}]
+    db.identity = {"ROLE_NAME": config.runner}
+    db.query_id = "raw-query"
+    monkeypatch.setattr("snow_analytical_search.agent.Database", lambda *_: db)
+    with pytest.raises(ValueError, match="Malformed"):
+        ask(config, "Question")
+    artifact = json.loads(next((tmp_path / "answers").glob("*.json")).read_text())
+    assert artifact["response"] == response
+    assert artifact["parse_error"]
+    assert artifact["status"] == "failed"
+
+
+def test_unmatched_native_result_is_not_execution_evidence():
+    result = {
+        "type": "tool_result",
+        "tool_result": {
+            "name": "system_execute_sql",
+            "status": "success",
+            "tool_use_id": "other",
+            "content": [],
+        },
+    }
+    response: dict[str, Any] = {
+        "content": [
+            {
+                "type": "tool_use",
+                "tool_use": {"name": "system_execute_sql", "tool_use_id": "expected"},
+            },
+            result,
+        ]
+    }
+    assert not summarize_response(response)["sql_execution_observed"]
+
+
+def test_ask_rejects_stale_instructions_even_when_snapshot_matches(tmp_path, monkeypatch):
+    config = Config("test", "ACCT", "DEMO", "a" * 40, tmp_path)
+    spec = specification(config)
+    spec["instructions"]["response"] = "Old instructions"
+    db = MagicMock(spec=Database)
+    db.__enter__.return_value = db
+    db.run.return_value = [{"agent_spec": json.dumps(spec)}]
+    monkeypatch.setattr("snow_analytical_search.agent.Database", lambda *_: db)
+    with pytest.raises(ValueError, match="run deploy"):
+        ask(config, "Question")
+    db.scalar.assert_not_called()

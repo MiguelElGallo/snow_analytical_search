@@ -8,11 +8,19 @@ from pathlib import Path
 
 from snowflake.connector.errors import Error
 
-from .agent import ask, deploy, evaluate, verify_runtime, verify_search
+from .agent import (
+    ask,
+    deploy,
+    evaluate,
+    specification,
+    validate_deployment,
+    verify_runtime,
+    verify_search,
+)
 from .cloud import ingest, setup, verify_corpus
 from .config import literal, load_config
 from .db import Database
-from .extraction import extract_pdfs
+from .evidence import verify_index
 from .source import download, read_manifest, write_json
 
 
@@ -29,7 +37,6 @@ def main() -> None:
         "preflight",
         "check-ai",
         "download",
-        "extract-pdfs",
         "setup",
         "ingest",
         "deploy",
@@ -56,8 +63,6 @@ def main() -> None:
                 }
         elif args.command == "download":
             result = {"files": download(config)}
-        elif args.command == "extract-pdfs":
-            result = extract_pdfs(config)
         elif args.command == "setup":
             result = setup(config)
         elif args.command == "check-ai":
@@ -92,6 +97,15 @@ def main() -> None:
             entries = read_manifest(config)
             with Database(config, config.owner) as db:
                 result = verify_corpus(db, config, entries)
+                if not args.corpus_only:
+                    result["index_evidence"] = verify_index(db, config)
+                    validate_deployment(
+                        config,
+                        specification(config),
+                        db.run(f"DESC AGENT {config.agent}"),
+                        db.run(f"DESC CORTEX SEARCH SERVICE {config.service}"),
+                        result["chunks"],
+                    )
             result["scope"] = "corpus_only" if args.corpus_only else "corpus_and_search"
             if not args.corpus_only:
                 with Database(config, config.runner) as db:

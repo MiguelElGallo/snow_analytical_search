@@ -1,7 +1,6 @@
 """Native search/agent configuration and captured question evidence."""
 
 import json
-import re
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -11,6 +10,14 @@ from snowflake.connector.errors import Error
 from .cloud import MARKER, verify_corpus
 from .config import Config, literal
 from .db import Database
+from .evidence import (
+    CONTEXT_SELECT,
+    audit_run,
+    fingerprint,
+    sql_lineage,
+    verify_inventory,
+    verify_probe,
+)
 from .extraction import decode
 from .source import read_manifest, write_json
 
@@ -48,6 +55,7 @@ def specification(config: Config) -> dict[str, Any]:
                 "physical page numbers, and URLs where available. These are fictional samples, "
                 "not real company or employee facts. Distinguish companies and conflicting "
                 "policies. If evidence is absent, say so. Never invent sources or policy. "
+                "Do not infer a company's sponsorship from other files in this mixed corpus. "
                 "A text extraction cannot establish a chart value or arrow direction."
             ),
             "orchestration": (
@@ -61,11 +69,15 @@ def specification(config: Config) -> dict[str, Any]:
                 "lists, counts, aggregates, and cross-document analysis. Count DISTINCT DOC_ID, "
                 "not chunks. Exclude KIND=query_example from factual policy evidence. "
                 f"The immutable snapshot is {config.snapshot}. When executing SQL, use warehouse "
-                f"{config.warehouse} and only scratch tables in {config.prefix}.SCRATCH. "
-                f"The read-only corpus tables {config.prefix}.CORPUS.DOCUMENTS and "
-                f"{config.prefix}.CORPUS.CHUNKS can verify inventory and full-corpus coverage; "
-                f"always filter SNAPSHOT_ID='{config.snapshot}'. "
+                f"{config.warehouse}. Analyze only the Search results through the native "
+                "RESULT_SCAN workflow. No Base Table is configured for this Search tool. "
+                f"Filter SNAPSHOT_ID='{config.snapshot}'. "
                 "Never claim an exhaustive semantic result from a small retrieved sample. "
+                "For benefit comparisons, retrieve each plan's coverage, exclusions, "
+                "prior authorization, referral conditions, and exceptions separately. "
+                "Before asserting an exclusion or absence, search that plan for conflicting "
+                "coverage and exceptions. Report conflicting passages with page citations; "
+                "do not resolve them by guessing. "
                 "If the implicit SQL tool is unavailable, state that analytical execution is "
                 "unavailable and stop that analysis. Do not substitute manual tallying or "
                 "a simulated AI_FILTER judgment, and do not present those as SQL/AI results. "
@@ -234,6 +246,7 @@ def summarize_response(
     text, annotations, tools, sql_successes = [], [], [], []
     search_results, analytical_lineage = [], []
     reachable_queries: set[str] = set()
+    uses: dict[str, str] = {}
     text_offset = 0
     for block in response.get("content", []):
         if block.get("type") == "text":
@@ -248,15 +261,20 @@ def summarize_response(
             text.append(block_text)
             text_offset += len(block_text)
         if block.get("type") == "tool_use":
-            tools.append(block["tool_use"].get("name"))
+            use = block["tool_use"]
+            tools.append(use.get("name"))
+            if use.get("tool_use_id"):
+                uses[use["tool_use_id"]] = use.get("name", "")
         if block.get("type") == "tool_result":
             result = block["tool_result"]
+            linked_use = uses.get(result.get("tool_use_id")) == result.get("name")
             if (
                 verified_search_tool
                 and expected_service
                 and result.get("name") == verified_search_tool
                 and result.get("type") == "cortex_search"
                 and result.get("status") == "success"
+                and linked_use
             ):
                 for content in result.get("content", []):
                     persisted = content.get("json", {}).get("search_results_persist", {})
@@ -266,16 +284,20 @@ def summarize_response(
                     ):
                         search_results.append({"service": expected_service, **persisted})
                         reachable_queries.add(persisted["query_id"].upper())
-            if result.get("name") == "system_execute_sql" and result.get("status") == "success":
+            if (
+                result.get("name") == "system_execute_sql"
+                and result.get("status") == "success"
+                and linked_use
+            ):
                 sql_successes.append(result)
                 for content in result.get("content", []):
                     payload = content.get("json", {})
-                    sql = payload.get("sql", "").upper()
-                    parents = set(re.findall(r"\bRESULT_SCAN\s*\(\s*'([^']+)'\s*\)", sql))
-                    if parents & reachable_queries:
+                    parents, uses_chunk_ai = sql_lineage(payload.get("sql", ""))
+                    parents = {parent.upper() for parent in parents}
+                    if parents and parents <= reachable_queries:
                         if payload.get("query_id"):
                             reachable_queries.add(payload["query_id"].upper())
-                        if re.search(r"\bAI_(?:FILTER|EXTRACT|AGG)\s*\(", sql):
+                        if uses_chunk_ai:
                             analytical_lineage.append(
                                 {"query_id": payload.get("query_id"), "parents": sorted(parents)}
                             )
@@ -285,19 +307,12 @@ def summarize_response(
             payload = content.get("json", {})
             if isinstance(payload, dict) and isinstance(payload.get("sql"), str):
                 statements.append(payload["sql"])
-    inline_analysis = any(
-        expected_service
-        and expected_service.upper() in sql.upper()
-        and "SEARCH_PREVIEW" in sql.upper()
-        and re.search(r"\bAI_(?:FILTER|EXTRACT|AGG)\s*\(", sql.upper())
-        for sql in statements
-    )
     return {
         "answer": "\n".join(text),
         "annotations": annotations,
         "tools": tools,
         "sql_execution_observed": bool(sql_successes),
-        "analytical_sql_observed": bool(inline_analysis or analytical_lineage),
+        "analytical_sql_observed": bool(analytical_lineage),
         "persisted_search_results": search_results,
         "analytical_lineage": analytical_lineage,
         "sql_statements": statements,
@@ -311,6 +326,9 @@ def summarize_response(
 
 def ask(config: Config, question: str, label: str = "question") -> dict[str, Any]:
     started = time.monotonic()
+    created_at = datetime.now(UTC)
+    stamp = created_at.strftime("%Y%m%dT%H%M%S%fZ")
+    path = config.state_dir / "answers" / f"{stamp}-{label}.json"
     with Database(config, config.runner) as db:
         db.assert_context()
         description = db.run(f"DESC AGENT {config.agent}")
@@ -318,44 +336,54 @@ def ask(config: Config, question: str, label: str = "question") -> dict[str, Any
         resource = live_spec.get("tool_resources", {}).get("corpus_search", {})
         if resource.get("search_service") != config.service:
             raise ValueError("Live agent search service does not match the configured snapshot")
+        if any(live_spec.get(key) != value for key, value in specification(config).items()):
+            raise ValueError("Live agent specification differs from this checkout; run deploy")
         try:
-            response = decode(
-                db.scalar(
-                    "SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(%s, %s)",
-                    (
-                        config.agent + "!LIVE",
-                        json.dumps(
-                            {
-                                "messages": [
-                                    {
-                                        "role": "user",
-                                        "content": [{"type": "text", "text": question}],
-                                    }
-                                ],
-                                "stream": False,
-                            }
-                        ),
+            response = db.scalar(
+                "SELECT SNOWFLAKE.CORTEX.DATA_AGENT_RUN(%s, %s)",
+                (
+                    config.agent + "!LIVE",
+                    json.dumps(
+                        {
+                            "messages": [
+                                {
+                                    "role": "user",
+                                    "content": [{"type": "text", "text": question}],
+                                }
+                            ],
+                            "stream": False,
+                        }
                     ),
-                )
+                ),
             )
         except Error as exc:
             response = {"error": str(exc), "code": exc.errno, "status": "failed"}
             db.query_id = exc.sfqid or ""
-        if not isinstance(response, dict):
-            raise ValueError("Agent did not return a JSON object")
         report = {
             "question": question,
-            "created_at": datetime.now(UTC).isoformat(),
+            "created_at": created_at.isoformat(),
+            "completed_at": datetime.now(UTC).isoformat(),
             "query_id": db.query_id,
             "elapsed_seconds": round(time.monotonic() - started, 2),
             "snapshot_id": config.snapshot,
             "identity": db.identity,
             "search_binding": {"tool": "corpus_search", "service": config.service},
+            "live_spec_sha256": fingerprint(live_spec),
+            "response_sha256": fingerprint(response),
             "response": response,
-            **summarize_response(response, config.service, "corpus_search"),
         }
-    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
-    write_json(config.state_dir / "answers" / f"{stamp}-{label}.json", report)
+        # Save before decoding or interpreting optional tool metadata.
+        write_json(path, report)
+        try:
+            response = decode(response)
+            if not isinstance(response, dict):
+                raise ValueError("Agent did not return a JSON object")
+            report.update(summarize_response(response, config.service, "corpus_search"))
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
+            report.update(status="failed", parse_error=str(exc))
+            raise ValueError(f"Malformed agent response; inspect {path}") from exc
+        finally:
+            write_json(path, report)
     if report["status"] not in (None, "completed"):
         raise ValueError(
             f"Agent did not complete (status={report['status']}); "
@@ -378,7 +406,9 @@ QUESTIONS = [
         "inventory",
         "Use analytical search and SQL to count every distinct source document in the entire "
         "corpus by FILE_TYPE. Return the complete list of source paths and the total number "
-        "of documents. Count DOC_ID once, not chunks; include JSON query examples.",
+        "of documents. Count DOC_ID once, not chunks; include JSON query examples. "
+        "Return a native SQL result with one row per DOC_ID, SOURCE_PATH, FILE_TYPE. "
+        "Use only Search results through RESULT_SCAN and state any coverage limitation.",
     ),
     (
         "semantic",
@@ -406,80 +436,34 @@ QUESTIONS = [
 ]
 
 
-IDENTITY_SQL = (
-    "SELECT CURRENT_USER() AS USER_NAME, CURRENT_ROLE() AS ROLE_NAME, "
-    "CURRENT_SECONDARY_ROLES() AS SECONDARY_ROLES, CURRENT_WAREHOUSE() AS WAREHOUSE_NAME"
-)
-
-
-def normalized_identity_sql(sql: str) -> str:
-    return "".join(sql.split()).upper().rstrip(";")
-
-
 def _verify_runtime(config: Config) -> dict[str, Any]:
     """Prove downstream SQL context independently of the client connection context."""
     report = ask(
         config,
-        "Use analytical search and SQL to count all distinct source documents by FILE_TYPE "
-        f"in the entire corpus, filtered to SNAPSHOT_ID={config.snapshot}. "
-        "Before the document analysis, use the native SQL execution tool to run exactly this "
-        f"separate read-only query to verify the execution context: {IDENTITY_SQL}; "
-        f"Use warehouse {config.warehouse}. Do not replace expressions with literals. "
-        "Include the actual identity query result before the document counts. "
-        "Do not access other databases.",
+        "Use analytical search for a bounded runtime diagnostic. Make exactly one "
+        "corpus_search request for mental health support, limit 10, use_sql_for_search=true, "
+        f"excluding KIND=query_example and filtering SNAPSHOT_ID={config.snapshot}. "
+        "Then use the native SQL tool to execute exactly this query, replacing only "
+        "{query_id} with the returned Search query ID: "
+        f"{CONTEXT_SELECT}; Use warehouse {config.warehouse}. "
+        "Do not replace the context expressions with literals. Read only this RESULT_SCAN, "
+        "not a base table. Report the actual results as a bounded sample. "
+        "If native SQL is unavailable, stop; do not simulate counts or reroute SQL into Search.",
         "runtime-context",
     )
-    candidates = []
-    for result in report["sql_results"]:
-        for content in result.get("content", []):
-            payload = content.get("json", {})
-            if normalized_identity_sql(payload.get("sql", "")) != normalized_identity_sql(
-                IDENTITY_SQL
-            ):
-                continue
-            result_set = payload.get("result_set", {})
-            columns = [
-                c["name"].upper()
-                for c in result_set.get("resultSetMetaData", {}).get("rowType", [])
-            ]
-            for values in result_set.get("data", []):
-                row = dict(zip(columns, values, strict=True))
-                if {"ROLE_NAME", "WAREHOUSE_NAME", "SECONDARY_ROLES", "USER_NAME"} <= row.keys():
-                    candidates.append((payload.get("query_id"), row))
-    if not candidates:
-        raise ValueError("No structured native SQL identity result; inspect runtime-context answer")
+    if not report["sql_results"]:
+        raise ValueError("No native SQL result; inspect the saved runtime-context answer")
     with Database(config, config.runner) as db:
-        history = []
-        for query_id, row in candidates:
-            secondary = decode(row["SECONDARY_ROLES"])
-            if (
-                row["ROLE_NAME"] != config.runner
-                or row["WAREHOUSE_NAME"] != config.warehouse
-                or row["USER_NAME"] != db.identity["USER_NAME"]
-                or secondary.get("roles") not in ("", [], None)
-                or secondary.get("value") not in ("", "NONE", None)
-            ):
-                raise ValueError("Native agent SQL executed with unexpected role or warehouse")
-            rows = db.run(
-                "SELECT QUERY_ID, ROLE_NAME, WAREHOUSE_NAME, EXECUTION_STATUS, QUERY_TEXT "
-                f"FROM TABLE({config.prefix}.INFORMATION_SCHEMA.QUERY_HISTORY_BY_USER("
-                "RESULT_LIMIT=>1000)) WHERE QUERY_ID=%s",
-                (query_id,),
-            )
-            if (
-                len(rows) != 1
-                or rows[0]["ROLE_NAME"] != config.runner
-                or (
-                    rows[0]["WAREHOUSE_NAME"] != config.warehouse
-                    or rows[0]["EXECUTION_STATUS"] != "SUCCESS"
-                    or normalized_identity_sql(rows[0]["QUERY_TEXT"])
-                    != normalized_identity_sql(IDENTITY_SQL)
-                )
-            ):
-                raise ValueError("Native SQL context not confirmed by query history")
-            history.extend(rows)
-    evidence = {"snapshot_id": config.snapshot, "status": "verified", "query_history": history}
-    return evidence
+        audit = audit_run(db, config, report)
+        context = verify_probe(config, audit, db.identity["USER_NAME"])
+    return {
+        "snapshot_id": config.snapshot,
+        "status": "verified",
+        "scope": "bounded_runtime",
+        "audit": audit,
+        "native_context": context,
+        "answer_sha256": report["response_sha256"],
+    }
 
 
 def verify_runtime(config: Config) -> dict[str, Any]:
@@ -514,11 +498,16 @@ def evaluate(config: Config) -> dict[str, Any]:
     write_json(latest, report)
     try:
         report["runtime"] = verify_runtime(config)
+        entries = read_manifest(config)
         for label, question in QUESTIONS:
             report["stage"] = label
             print(f"Asking {label}: {question}", flush=True)
             result = {"label": label, **ask(config, question, label)}
             report["results"].append(result)
+            with Database(config, config.runner) as db:
+                result["audit"] = audit_run(db, config, result)
+            if label == "inventory":
+                verify_inventory(result["audit"], entries)
             print(f"Completed {label} in {result['elapsed_seconds']} seconds", flush=True)
         report["stage"] = "oracle"
         with Database(config, config.runner) as db:
@@ -530,7 +519,7 @@ def evaluate(config: Config) -> dict[str, Any]:
             )
         report["stage"] = "analytical_acceptance"
         if not any(
-            row["analytical_sql_observed"]
+            row["audit"]["analytical_query_ids"]
             for row in report["results"]
             if row["label"] == "semantic"
         ):

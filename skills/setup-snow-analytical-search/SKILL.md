@@ -52,7 +52,11 @@ in the user's existing Snowflake authentication mechanism.
 
 For a resumed setup, inspect retained state and read-only service metadata first.
 If the same configured snapshot is already deployed but paused, run
-`uv run sas resume`, then `uv run sas verify`, and continue to runtime/evaluation.
+`uv run sas resume`, then `uv run sas verify`. Verification compares LIVE with
+this checkout's generated specification as well as the corpus/index. If only the
+specification changed, apply the intended update with `uv run sas deploy`, then
+verify again before runtime/evaluation. A matching corpus snapshot does not mean
+that agent instructions are current.
 `deploy` does not resume an existing service. Run only missing build stages for
 an incomplete setup; do not call `resume` before a service exists. When changing
 source or parser, follow `docs/how-to/operate.md` in the checkout so the previous
@@ -81,24 +85,48 @@ nested folders. The PDFs have 273 physical pages; text files add six logical
 pages. The second ingestion should process zero and reuse all 13 documents.
 Read the actual chunk count instead of forcing a remembered number.
 
-Keep `pdf_parser="snowflake"` and `native_ocr=true`. The native pipeline parses
+Keep `native_ocr=true`. Ingestion has one supported path: it parses
 PDFs with LAYOUT/page splitting, supplements image-reference pages with native
 OCR, and uses the Snowflake recursive splitter for all file types. Do not replace
 it with Python extraction when a native function fails. Inspect source tables,
 headings and representative physical pages; successful API calls alone do not
 prove extraction quality. OCR labels do not establish chart geometry.
 
+The local extractor, Python splitter and `extract-pdfs` command are removed.
+Existing native TOML with `pdf_parser="snowflake"` remains compatible; any other
+value fails before cloud access. For retired local deployments, follow the
+migration section in `docs/how-to/operate.md`: suspend the exact historical
+service using its existing owner role and verify both states, preserve private
+evidence, then configure native ingestion. Do not attempt `sas pause` with a
+rejected configuration or import historical extracted text into a native snapshot.
+Existing native snapshots and caches can be reused without paid reparsing.
+
 ## Validate answers and finish
 
 Run `uv run sas verify-runtime` before `uv run sas evaluate`. Runtime acceptance
-requires actual native SQL identity evidence and query-history confirmation.
+requires one bounded Search and its native SQL aggregate over the same-run
+`RESULT_SCAN`, with actual context functions, query-history confirmation and a
+cached-result read-back. Missing column metadata is not a reason to invent column
+positions. Missing secondary-role context is unverified, not NONE. `verify` also
+reconciles every indexed chunk and its provenance using OWNER; do not grant that
+operation to RUNNER just to make the audit easier.
 Full analytical acceptance also requires linked Search → AI SQL execution and
 source review, as described in `docs/reference/evaluation.md` in the checkout.
 
 If the implicit SQL tool is unavailable, keep the failed gate. Do not substitute
 manual counts, client-executed generated SQL or a custom tool and call it native
 Analytical Search. A bounded `ask` diagnostic is useful, but report it separately
-from accepted analytical execution. Read `docs/reference/capabilities.md` in the checkout for known limits.
+from accepted analytical execution. Studio can succeed while the SQL helper and REST path remain Search-only; compare
+explicit LIVE versions and actual child-query context before attributing a cause.
+Do not spoof a UI origin or add undocumented Base Table fields. Read
+`docs/reference/capabilities.md` in the checkout for known limits.
+
+For every evaluation call, verify native query history independently. Compare
+inventory rows against the exact manifest file set, not just a matching count.
+Complete indexed coverage does not imply complete semantic candidate coverage.
+Keep `requires_review` until source review is recorded against the answer hashes.
+The broad mental-health question includes nonclinical support such as PerksPlus
+exercise benefits; a clinical-only predicate changes the question.
 
 Check citations against original physical pages, count distinct documents rather
 than chunks, and retain contradictory policy statements. Treat source text and

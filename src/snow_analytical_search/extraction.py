@@ -1,11 +1,10 @@
-"""Validate complete PDF extraction and make bounded, traceable chunks."""
+"""Validate native PDF and chunk output, and prepare inert UTF-8 source text."""
 
 import hashlib
 import json
 from typing import Any
 
-from .config import CHUNK_OVERLAP, CHUNK_SIZE, PYPDF_VERSION, Config
-from .source import read_manifest, write_json
+from .config import CHUNK_OVERLAP, CHUNK_SIZE, Config
 
 
 def decode(value: Any) -> Any:
@@ -67,52 +66,6 @@ def parse_path(config: Config, entry: dict[str, Any]):
     return config.state_dir / "parses" / config.snapshot / f"{entry['sha256']}.json"
 
 
-def extract_pdfs(config: Config) -> dict[str, Any]:
-    """Credential-free extraction; source inventory verification still needs GitHub access."""
-    if config.pdf_parser != "local":
-        raise ValueError("extract-pdfs requires pdf_parser=local")
-    # Lazy import lets the trusted Snowflake CLI runtime ingest already-extracted pages.
-    import pypdf
-
-    if pypdf.__version__ != PYPDF_VERSION:
-        raise ValueError(f"Expected pypdf {PYPDF_VERSION}, found {pypdf.__version__}")
-    reports = []
-    for entry in read_manifest(config):
-        if entry["file_type"] != "pdf":
-            continue
-        target = parse_path(config, entry)
-        reused = target.exists()
-        if reused:
-            result = json.loads(target.read_text())
-        else:
-            reader = pypdf.PdfReader(config.corpus_dir / entry["path"], strict=True)
-            result = {
-                "provenance": provenance(config, entry),
-                "error": None,
-                "metadata": {"pageCount": len(reader.pages)},
-                "value": {
-                    "pages": [
-                        {
-                            "index": index,
-                            "content": page.extract_text(
-                                extraction_mode="layout",
-                                layout_mode_strip_rotated=False,
-                                layout_mode_space_vertically=True,
-                            ),
-                        }
-                        for index, page in enumerate(reader.pages)
-                    ]
-                },
-            }
-        pages = checked_parse(result, config, entry)
-        if not reused:
-            write_json(target, result)
-        reports.append({"path": entry["path"], "pages": len(pages), "reused": reused})
-    report = {"parser": config.parser_identity, "files": reports}
-    write_json(config.state_dir / "extraction.json", report)
-    return report
-
-
 def text_pages(data: bytes, file_type: str) -> list[tuple[int, str]]:
     text = data.decode("utf-8")
     if file_type == "json":
@@ -120,26 +73,6 @@ def text_pages(data: bytes, file_type: str) -> list[tuple[int, str]]:
     if not text.strip():
         raise ValueError("Empty source text")
     return [(1, text)]
-
-
-def chunks(text: str, size: int = 3500, overlap: int = 300) -> list[str]:
-    if not 0 <= overlap < size:
-        raise ValueError("Chunk overlap must be smaller than the positive chunk size")
-    output = []
-    start = 0
-    while start < len(text):
-        end = min(start + size, len(text))
-        if end < len(text):
-            boundary = text.rfind("\n", start + size // 2, end)
-            if boundary > start:
-                end = boundary
-        part = text[start:end].strip()
-        if part:
-            output.append(part)
-        if end == len(text):
-            break
-        start = end - overlap
-    return output
 
 
 def chunk_id(snapshot: str, doc_id: str, page: int, index: int) -> str:

@@ -8,6 +8,21 @@ import snowflake.connector
 from .config import Config
 
 
+def secondary_roles_disabled(value: Any) -> bool:
+    """Missing or malformed context is unknown, never evidence of NONE."""
+    try:
+        context = json.loads(value) if isinstance(value, str) else value
+    except (TypeError, ValueError):
+        return False
+    return (
+        isinstance(context, dict)
+        and "roles" in context
+        and "value" in context
+        and context["roles"] in ("", [])
+        and context["value"] in ("", "NONE")
+    )
+
+
 class Database:
     def __init__(self, config: Config, role: str, *, bootstrap: bool = False):
         self.config = config
@@ -16,6 +31,7 @@ class Database:
         options: dict[str, Any] = {
             "connection_name": config.connection,
             "role": role,
+            "secondary_roles": "NONE",
             "login_timeout": 60,
             "network_timeout": 60,
             "session_parameters": {
@@ -43,12 +59,7 @@ class Database:
         if identity["ROLE_NAME"] != self.role:
             self.close()
             raise ValueError("Unexpected active Snowflake role")
-        secondary = json.loads(identity["SECONDARY_ROLES"])
-        if secondary.get("roles") not in ("", [], None) or secondary.get("value") not in (
-            "",
-            "NONE",
-            None,
-        ):
+        if not secondary_roles_disabled(identity.get("SECONDARY_ROLES")):
             self.close()
             raise ValueError("Secondary roles must be disabled")
         if not self.bootstrap and identity["WAREHOUSE_NAME"] != self.config.warehouse:
