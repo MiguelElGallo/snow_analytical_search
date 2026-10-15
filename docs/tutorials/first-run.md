@@ -79,7 +79,9 @@ then runs the native rebuild:
 
 The loader checks full text coverage and source provenance before committing
 each document. Read [how the native rebuild preserves page references](../explanation/architecture.md#how-the-native-rebuild-preserves-page-references)
-for the file-type handling, chunk limits and a concrete citation example.
+for the file-type handling, chunk limits and a concrete citation example. The
+[ingestion diagrams](../explanation/ingestion.md) show each document type's path
+from verified original to stored chunks.
 
 For the pinned corpus, expect 13 documents, 279 pages and 13 staged files. The
 chunk count depends on the parser/splitter; the current measured count belongs

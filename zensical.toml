@@ -23,6 +23,7 @@ nav = [
   ] },
   { "Explanation" = [
     { "Architecture and evidence" = "explanation/architecture.md" },
+    { "Document ingestion" = "explanation/ingestion.md" },
     { "Access and cost" = "explanation/access-cost.md" },
   ] },
 ]

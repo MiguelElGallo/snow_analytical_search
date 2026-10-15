@@ -21,6 +21,8 @@ Azure sample folder is included, with original bytes, page references and source
 versions retained. Snowflake parses the PDFs, supplements printed image labels
 with OCR, and splits all content into bounded passages.
 
+[See how each document type is ingested →](explanation/ingestion.md)
+
 !!! info "Know what passed"
     Native ingestion, exact index coverage and document Q&A have been tested.
     Bounded native analysis also succeeded in Studio. Complete programmatic analytical

@@ -43,3 +43,18 @@ After merging a reviewed change, verify the successful deployment and open
 [the public site](https://miguelelgallo.github.io/snow_analytical_search/).
 Check navigation, both color modes and a code example. Do not equate a completed
 local build with a live deployment.
+
+## Review diagram changes
+
+The [ingestion diagrams](../explanation/ingestion.md) use Zensical's
+[native Mermaid support](https://zensical.org/docs/authoring/diagrams/), which
+follows the site's light and dark themes. Keep each file-type path small enough
+to read on a narrow screen. Include `accTitle`, `accDescr` and adjacent prose
+so the explanation is available beyond the drawing.
+
+Check arrows and labels against the implementation, especially execution
+locations, page numbers, optional steps and transaction boundaries. Then open
+the rendered page in both themes at desktop and mobile widths. A strict build
+checks the documentation build; it does not prove that browser-rendered Mermaid
+is valid or readable. Complete two peer-review passes and resolve findings
+before publishing a changed pipeline diagram.

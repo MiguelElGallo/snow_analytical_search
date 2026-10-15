@@ -5,6 +5,19 @@ Source: [Azure sample data at the pinned commit](https://github.com/Azure-Sample
 Commit: `558ffd397eddcfe4da5c85ebc285796b367eb9b2`.
 Default native snapshot: `8f805241c0e87c37f920ab29` (LAYOUT + filtered OCR + native splitter).
 See [capabilities and limits](capabilities.md) for content checks.
+See [the ingestion diagrams](../explanation/ingestion.md) for how each file type
+becomes pages and chunks.
+
+## Source attribution
+
+The source repository is
+[Azure-Samples/azure-search-openai-demo](https://github.com/Azure-Samples/azure-search-openai-demo).
+Its MIT license states **Copyright (c) 2023 Azure Samples**. Its README also
+includes a separate Microsoft notice for the generated PDF documents.
+[Third-party notices](https://github.com/MiguelElGallo/snow_analytical_search/blob/main/THIRD_PARTY_NOTICES.md)
+reproduces both texts with links to the pinned originals. Preserve the source
+documents and their individual notices when sharing them. The downloader saves
+the upstream license as `UPSTREAM_LICENSE` alongside the local corpus.
 
 ## Complete inventory
 

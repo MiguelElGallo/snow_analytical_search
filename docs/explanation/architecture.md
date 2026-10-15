@@ -3,37 +3,22 @@
 The system keeps source acquisition, text extraction, retrieval, and analytical
 execution separate so that each stage can be checked independently.
 
-```text
-Pinned GitHub data/ tree
-        |
-        v
-Verified originals + manifest
-        |
-        v
-Internal original stage (byte-verified)
-        |
-        +--> PDF: native LAYOUT --> image-reference pages: native OCR
-        |                                  |
-        +--> JSON/Markdown text            |
-        |                                  |
-        +------------------+---------------+
-                           v
-                Validated pages + provenance
-                           |
-                           v
-                Native recursive page chunks
-                           |
-                           v
-                  Versioned Cortex Search
-                           |
-                           v
-                     Native Cortex Agent
-                      /               \
-             Passage question    Analytical question
-                  Search          Search + AI + SQL
-                      \               /
-                       Answer + evidence
+```mermaid
+flowchart TD
+  accTitle: From verified documents to an agent backed by evidence
+  accDescr: A pinned GitHub source becomes verified originals. Type-specific preparation produces pages, native Snowflake splitting produces chunks, and validated chunks are committed to corpus tables. Deployment connects snapshot-specific Cortex Search to a Cortex Agent. A separate verification step audits the full index; analytical runtime and answer quality require their own checks.
+  source["Pinned GitHub source<br/>Verified originals + manifest"]
+  pages["Prepare pages by file type<br/>PDF · JSON · Markdown"]
+  chunks["Snowflake recursive splitting<br/>Validate and store corpus rows"]
+  deploy["Deploy snapshot-specific Search<br/>Connect Cortex Agent"]
+  index["Verify the full search index<br/>Text + source provenance"]
+  runtime["Check native analytical execution<br/>Review answers and citations"]
+  source --> pages --> chunks --> deploy --> index --> runtime
 ```
+
+See [the document ingestion diagrams](ingestion.md) for the separate PDF, JSON
+and Markdown paths, selective OCR, and shared chunking and storage. The overview
+shows the workflow; each verification step must pass on its own.
 
 ## A complete source snapshot
 
