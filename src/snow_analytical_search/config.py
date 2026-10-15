@@ -6,7 +6,6 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-PIPELINE_VERSION = "pages-v2-chunks-3500-overlap-300"
 CHUNK_SIZE = 3500
 CHUNK_OVERLAP = 300
 NATIVE_PIPELINE_VERSION = (
@@ -14,8 +13,6 @@ NATIVE_PIPELINE_VERSION = (
     "snowflake.cortex.split_text_recursive_character:"
     "pdf-md-markdown-json-none:3500:300:per-page"
 )
-PYPDF_VERSION = "6.10.0"
-LOCAL_PARSER = f"pypdf-{PYPDF_VERSION}-layout-rotated-included-vertical-space"
 REPOSITORY = "Azure-Samples/azure-search-openai-demo"
 
 
@@ -36,7 +33,6 @@ class Config:
     prefix: str
     source_commit: str
     state_dir: Path
-    pdf_parser: str = "snowflake"
     native_ocr: bool = True
 
     def __post_init__(self) -> None:
@@ -47,20 +43,16 @@ class Config:
             raise ValueError("Set expected_account to your Snowflake CURRENT_ACCOUNT_NAME()")
         if not re.fullmatch(r"[0-9a-f]{40}", self.source_commit):
             raise ValueError("source_commit must be a full lowercase 40-character Git commit SHA")
-        if self.pdf_parser not in {"local", "snowflake"}:
-            raise ValueError("pdf_parser must be local or snowflake")
         if type(self.native_ocr) is not bool:
             raise ValueError("native_ocr must be a boolean")
 
     @property
     def parser_identity(self) -> str:
-        return LOCAL_PARSER if self.pdf_parser == "local" else "ai-parse-document-layout-page-split"
+        return "ai-parse-document-layout-page-split"
 
     @property
     def pipeline_identity(self) -> str:
-        if self.pdf_parser == "snowflake":
-            return NATIVE_PIPELINE_VERSION + (":ocr-image-pages-v1" if self.native_ocr else "")
-        return f"{PIPELINE_VERSION}:{self.parser_identity}"
+        return NATIVE_PIPELINE_VERSION + (":ocr-image-pages-v1" if self.native_ocr else "")
 
     @property
     def snapshot(self) -> str:
@@ -99,6 +91,13 @@ class Config:
 def load_config(path: Path) -> Config:
     path = path.expanduser()
     data = tomllib.loads(path.read_text())
+    # Reject retired configurations before a previously offline workflow can incur AI costs.
+    if data.get("pdf_parser", "snowflake") != "snowflake":
+        raise ValueError(
+            "Local ingestion has been removed; follow "
+            "docs/how-to/operate.md#upgrade-from-retired-local-preparation "
+            "to configure Snowflake native ingestion"
+        )
     state_dir = Path(data.get("state_dir", "~/.local/state/snow-analytical-search")).expanduser()
     return Config(
         connection=data["connection"],
@@ -106,6 +105,5 @@ def load_config(path: Path) -> Config:
         prefix=data["prefix"],
         source_commit=data["source_commit"],
         state_dir=(path.parent / state_dir).resolve(),
-        pdf_parser=data.get("pdf_parser", "snowflake"),
         native_ocr=data.get("native_ocr", True),
     )

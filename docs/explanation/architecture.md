@@ -78,8 +78,7 @@ the exact Git commit.
 
 The native rebuild uses **`AI_PARSE_DOCUMENT` in `LAYOUT` mode for the seven PDFs**
 and **Snowflake's recursive splitter for all 13 files**, preserving page references
-throughout ingestion. This is the default pipeline, selected by
-`pdf_parser="snowflake"`.
+throughout ingestion. This is the only supported ingestion pipeline.
 
 | Files in the pinned corpus | Text prepared for chunking | Page reference |
 | --- | --- | --- |
@@ -97,6 +96,8 @@ for the parsing options and output format.
 Next, `SNOWFLAKE.CORTEX.SPLIT_TEXT_RECURSIVE_CHARACTER` splits the prepared text
 for **every file**, including JSON and Markdown. It uses Markdown boundaries for
 PDF layout output and Markdown files, and ordinary text boundaries for JSON.
+Reading UTF-8 text and recursively splitting it are deterministic operations;
+AI parsing is used for the PDFs.
 The [recursive splitter](https://docs.snowflake.com/en/sql-reference/functions/split_text_recursive_character-snowflake-cortex)
 tries progressively smaller text boundaries until chunks fit the configured
 limit: 3,500 characters, with up to 300 characters of overlap.
@@ -116,15 +117,16 @@ enrichment policy.
 
 The loader validates every chunk and reconstructs each page's complete text,
 ignoring whitespace, to reject omitted content. It does not repair native output
-locally. PDF metadata checks and original-page review provide independent
-coverage and accuracy evidence; a successful API call alone proves neither.
+locally. Native page metadata checks detect malformed output. Original-page
+review provides independent coverage and accuracy evidence; a successful API
+call alone proves neither.
 Tables and extracted chart labels still require source inspection before making
 claims about plotted values or visual relationships.
 
-The historical `local` mode uses pinned pypdf layout extraction and a Python
-splitter. It remains reproducible under its original snapshot identity. The
-native rebuild uses Snowflake parsing and splitting; local preparation is not
-evidence that this pipeline passed validation.
+Python orchestrates the Snowflake calls, prepares JSON/Markdown text, and validates
+source integrity and native output. It does not extract PDF text or generate
+chunks. A native parsing or splitting failure stops the load before that
+document's stored corpus rows are replaced.
 
 ## Sample data is evidence, not instructions
 

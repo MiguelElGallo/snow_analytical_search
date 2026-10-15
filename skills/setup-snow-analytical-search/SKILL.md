@@ -85,12 +85,21 @@ nested folders. The PDFs have 273 physical pages; text files add six logical
 pages. The second ingestion should process zero and reuse all 13 documents.
 Read the actual chunk count instead of forcing a remembered number.
 
-Keep `pdf_parser="snowflake"` and `native_ocr=true`. The native pipeline parses
+Keep `native_ocr=true`. Ingestion has one supported path: it parses
 PDFs with LAYOUT/page splitting, supplements image-reference pages with native
 OCR, and uses the Snowflake recursive splitter for all file types. Do not replace
 it with Python extraction when a native function fails. Inspect source tables,
 headings and representative physical pages; successful API calls alone do not
 prove extraction quality. OCR labels do not establish chart geometry.
+
+The local extractor, Python splitter and `extract-pdfs` command are removed.
+Existing native TOML with `pdf_parser="snowflake"` remains compatible; any other
+value fails before cloud access. For retired local deployments, follow the
+migration section in `docs/how-to/operate.md`: suspend the exact historical
+service using its existing owner role and verify both states, preserve private
+evidence, then configure native ingestion. Do not attempt `sas pause` with a
+rejected configuration or import historical extracted text into a native snapshot.
+Existing native snapshots and caches can be reused without paid reparsing.
 
 ## Validate answers and finish
 

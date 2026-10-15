@@ -54,10 +54,9 @@ semantic document classification.
 
 Native envelopes and chunk evidence retain actual Snowflake query IDs. Composite
 LAYOUT-plus-OCR envelopes have no single parse query ID; their `inputs` preserve
-both original query IDs, artifact hashes and source-bound provenance. The
-parse query ID is null for historical local extraction; that envelope instead
-records `pypdf-6.10.0-layout-rotated-included-vertical-space` and the source hash.
-Snapshot identity also includes chunking version/options.
+both original query IDs, artifact hashes and source-bound provenance.
+Snapshot identity also includes native chunking version/options. Cached output
+must match the source hash and native pipeline identity before reuse.
 
 ## Independent inventory query
 

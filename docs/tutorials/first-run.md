@@ -34,7 +34,7 @@ Edit `~/.config/snow-analytical-search/demo.toml`. Set `connection` to your prof
 snow sql -c YOUR_CONNECTION -q 'SELECT CURRENT_ACCOUNT_NAME();'
 ```
 
-Keep the pinned `source_commit` and `pdf_parser="snowflake"` for this tutorial.
+Keep the pinned `source_commit` and `native_ocr=true` for this tutorial.
 The example placeholder for `expected_account` deliberately fails validation.
 
 ```bash
@@ -84,7 +84,7 @@ for the file-type handling, chunk limits and a concrete citation example.
 For the pinned corpus, expect 13 documents, 279 pages and 13 staged files. The
 chunk count depends on the parser/splitter; the current measured count belongs
 in [capabilities and limits](../reference/capabilities.md). A parser error stops ingestion
-and is preserved for inspection. There is no automatic local fallback.
+and is preserved for inspection. PDF extraction and chunking run only in Snowflake.
 
 Run `uv run sas ingest` once more. Its summary should report `processed: 0` and
 `reused: 13`. Originals are checked again, but successful parsing and table
@@ -93,8 +93,8 @@ inserts are reused.
 The `check-ai` prerequisite makes two small AI calls. If it fails with a trial
 restriction, follow [trial access troubleshooting](../how-to/troubleshoot.md#trial-ai-access)
 before ingestion. A successful response confirms those functions work; it does
-not prove that Search or Agents work. A historical local-parser preparation run
-must be rebuilt with the native setting before evaluating this pipeline.
+not prove that Search or Agents work. If upgrading an earlier preparation, follow
+[the migration steps](../how-to/operate.md#upgrade-from-retired-local-preparation).
 
 ## 4. Deploy the native search agent
 

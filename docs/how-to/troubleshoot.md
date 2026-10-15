@@ -19,8 +19,7 @@ not upgrade the account or end the trial. Check the live billing UI before
 making a billing change; the demo does not change payment information.
 
 Once AI is enabled, follow [continue after AI access](operate.md#continue-after-ai-access-is-enabled).
-Do not switch to local extraction to claim native ingestion success. Resolve
-AI access before running the native pipeline.
+Ingestion requires these native services; resolve AI access before running it.
 
 ## A model is in legacy state
 
@@ -53,8 +52,9 @@ supported Python 3.11–3.13 range and locked dependencies.
 Keep the failed evidence. Move the specifically identified damaged local original
 outside the corpus directory, then run `download` to fetch it again. Existing
 files are checked and reused; `download` does not overwrite a corrupt file.
-Inspect the original page. A blank extraction may need OCR or a different parser;
-neither a missing page nor an unsupported file should be silently omitted.
+Inspect the original page and the retained native LAYOUT/OCR responses. Resolve
+the native extraction failure before loading; neither a missing page nor an
+unsupported file should be silently omitted.
 
 Do not edit the local manifest to make validation pass. It is compared against
 the authoritative Git tree. Repeated ingestion also checks each staged file's

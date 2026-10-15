@@ -13,12 +13,16 @@ file. The `--config` option goes before the command.
 | `prefix` | Uppercase resource prefix, at most 48 characters; default `SNOW_ANALYTICAL_SEARCH` |
 | `source_commit` | Full lowercase 40-character commit SHA in the Azure sample repository |
 | `state_dir` | Local evidence/cache directory, `~` expands to your home directory; relative paths resolve beside the config. Default: `~/.local/state/snow-analytical-search` |
-| `native_ocr` | Boolean, default `true`; native OCR supplements only PDF pages with image references. `false` reproduces the native layout-only baseline. Ignored in historical local mode. |
-| `pdf_parser` | `snowflake` (default): native PDF parsing and native splitting of every file. `local` preserves the historical offline preparation path; never selected silently after a failure |
+| `native_ocr` | Boolean, default `true`; native OCR supplements only PDF pages with image references. `false` reproduces the native layout-only baseline. |
 
 The upstream repository is fixed in code as `Azure-Samples/azure-search-openai-demo`.
-Changing the commit or parser changes the snapshot. Changing credentials is not
-part of this configuration.
+Changing the commit or native extraction settings changes the snapshot. Changing
+credentials is not part of this configuration. PDF parsing and chunking always
+use Snowflake functions.
+
+The retired `pdf_parser` selector is no longer part of the configuration. Existing
+`pdf_parser="snowflake"` files are accepted for compatibility; every other value
+fails before connecting. See [upgrade instructions](../how-to/operate.md#upgrade-from-retired-local-preparation).
 
 ## Commands
 
@@ -28,7 +32,6 @@ Prefix each command below with `uv run sas`.
 | --- | --- | --- |
 | `preflight` | Report account, region, and cross-region setting | ACCOUNTADMIN |
 | `download` | Fetch and verify the complete pinned `data/` tree and license | No Snowflake connection |
-| `extract-pdfs` | Create/check local PDF page envelopes; verifies inventory through GitHub | No Snowflake connection |
 | `setup` | Create dedicated roles, database, warehouse, schemas, stage, and tables | ACCOUNTADMIN, then OWNER |
 | `ingest` | Upload/read back originals, parse or reuse pages, load and verify snapshot | OWNER |
 | `check-ai` | Two small calls: AI_FILTER and AI_COMPLETE; save success or failure | RUNNER |
@@ -90,7 +93,6 @@ IDs can reveal private account or document details.
 | `ocr/<snapshot>/<sha256>.json` | Raw native OCR, exact page filters, errors and query IDs |
 | `chunks/<snapshot>/<doc_id>.json` | Unmodified native split rows, SQL, query ID and provenance |
 | `snapshots/<snapshot>/` | Snapshot-bound ingestion reports and retained live-run audits |
-| `extraction.json` | Historical local extraction's PDF page counts and parser identity |
 | `ingestion.json` | Latest load verification, processed/reused counts |
 | `corpus-verification.json` | Explicit corpus-only verification |
 | `verification.json` | Corpus and indexed-source checks |

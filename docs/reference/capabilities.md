@@ -14,8 +14,8 @@ Checks cover original hashes, uploaded-byte read-back, physical page counts,
 complete page-text coverage, stored rows and retrieval of every source. The latest
 index audit also reconciled all 281 indexed chunk IDs, text and provenance with
 the corpus using `CORTEX_SEARCH_DATA_SCAN`; equal row counts alone are insufficient.
-Native extraction recovered the paycheck-cost table in `Benefit_Options.pdf` physical
-page 4 that local extraction had omitted.
+Native extraction recovered the paycheck-cost table in `Benefit_Options.pdf`
+physical page 4.
 
 These measured counts are a baseline, not values to hardcode into a new run.
 Parser changes can alter extracted text and chunk boundaries. Never repair a

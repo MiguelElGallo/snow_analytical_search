@@ -14,7 +14,6 @@ from .extraction import (
     checked_chunks,
     checked_parse,
     chunk_id,
-    chunks,
     decode,
     parse_path,
     pdf_pages,
@@ -130,13 +129,7 @@ def extract(db: Database, config: Config, entry: dict[str, Any]) -> list[tuple[i
         else:
             write_json(target, result)
         return pages
-    if config.pdf_parser == "local":
-        target = parse_path(config, entry)
-        if not target.exists():
-            raise ValueError("Run extract-pdfs with the configured local parser before ingest")
-        result = json.loads(target.read_text())
-        parse_query_id = None
-    elif config.native_ocr:
+    if config.native_ocr:
         result = enriched_native_parse(db, config, entry)
         parse_query_id = None  # Composite: actual query IDs are retained with both inputs.
         write_json(parse_path(config, entry), result)
@@ -273,15 +266,7 @@ def native_chunks(
 def _insert_document(
     db: Database, config: Config, entry: dict[str, Any], pages: list[tuple[int, str]]
 ) -> int:
-    parts = (
-        native_chunks(db, config, entry, pages)
-        if config.pdf_parser == "snowflake"
-        else [
-            (page, index, content)
-            for page, text in pages
-            for index, content in enumerate(chunks(text))
-        ]
-    )
+    parts = native_chunks(db, config, entry, pages)
     chunk_rows = []
     for page, index, content in parts:
         chunk_rows.append(

@@ -4,9 +4,9 @@ These instructions assume you have completed setup with `~/.config/snow-analytic
 
 ## Continue after AI access is enabled
 
-If the corpus was prepared with `pdf_parser="local"`, rebuild it natively. First
-pause its service using the old configuration and retain that configuration for
-historical service control. Then set `pdf_parser="snowflake"`.
+Ingestion requires Snowflake AI access. If you are upgrading an earlier local
+preparation, complete [the migration steps](#upgrade-from-retired-local-preparation)
+before running these commands.
 
 ```bash
 uv run sas check-ai
@@ -69,28 +69,57 @@ only the snapshot in its current configuration, so keep an old config if you
 need to operate an older service.
 
 If the upstream folder gains an unsupported file type, ingestion stops. Add and
-test an extractor before claiming complete coverage of that revision.
+test its native ingestion support before claiming complete coverage of that revision.
 
-## Parser choice and historical local preparation
+## Native parsing and OCR
 
-Set `pdf_parser="snowflake"` only on an account where `AI_PARSE_DOCUMENT` works.
-Pause the old service first. Skip `extract-pdfs`, then run `ingest`, `deploy`,
-and `verify`. Native parsing uses `LAYOUT`, `page_split=true`, and error details.
-Changing parser produces a different snapshot and cache identity.
+PDF parsing always uses `AI_PARSE_DOCUMENT` with `LAYOUT`, `page_split=true`,
+and error details. Native failures stop ingestion and preserve their evidence.
 
 With `native_ocr=true` (the default), native OCR supplements only pages containing
 image references. It reuses the same native LAYOUT extraction, validates exact
 physical-page alignment, and retains both raw responses and their query IDs.
 This recovers printed chart labels without claiming unprinted numeric values.
 
-Native mode also uses `SPLIT_TEXT_RECURSIVE_CHARACTER` for every PDF, JSON and
+Ingestion uses `SPLIT_TEXT_RECURSIVE_CHARACTER` for every PDF, JSON and
 Markdown file. Splitting retains physical page boundaries, uses Markdown
 structure for layout output and Markdown files, and uses ordinary separators for
 JSON. The limit is 3,500 characters with up to 300 characters of overlap.
 
-The explicit `local` mode remains available to reproduce historical preparation:
-run `extract-pdfs` before `ingest`. It uses pypdf and the old Python splitter; it
-is not the native pipeline and cannot be used as its acceptance evidence.
+PDF parsing and OCR are AI operations. Reading JSON/Markdown source text and
+Snowflake's recursive splitting are deterministic preparation steps.
+
+## Upgrade from retired local preparation
+
+The local PDF extractor, Python splitter and `extract-pdfs` command have been
+removed. A configuration containing `pdf_parser="local"` is rejected before any
+connection or paid AI call. Do not use that configuration with `sas pause`.
+
+1. Preserve the old private configuration and evidence. Find the exact historical
+   Search service name in its deployment report. Confirm it with
+   `SHOW CORTEX SEARCH SERVICES IN SCHEMA <database>.APP`
+   using its existing owner role. Check the account and object before changing it.
+2. Suspend that specific service in Snowflake:
+
+   ```sql
+   ALTER CORTEX SEARCH SERVICE <database>.APP.<old_service> SUSPEND;
+   SHOW CORTEX SEARCH SERVICES IN SCHEMA <database>.APP;
+   ```
+
+   Read back both `indexing_state` and `serving_state` as `SUSPENDED`. This retains
+   the historical service and data; keep its private evidence for comparison.
+3. Run `uv sync --locked`, then prepare a native private configuration from the
+   current example, without the retired parser setting. Keep the old configuration
+   as evidence; it is no longer an executable setup.
+4. Run `uv run sas --config /path/to/native-demo.toml check-ai` with the native
+   configuration. Only after it succeeds, run the ingestion sequence above with
+   that same configuration. Native parsing uses its own snapshot and cache
+   identity; historical extracted text is not imported.
+
+Existing native configurations containing `pdf_parser="snowflake"` remain
+compatible, but the field is no longer needed. Both native snapshot identities,
+with and without supplemental OCR, are unchanged. An existing native deployment
+can be verified and reused without parsing it again.
 
 ## Build the documentation
 

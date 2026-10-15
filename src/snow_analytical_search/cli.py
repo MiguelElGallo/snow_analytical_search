@@ -21,7 +21,6 @@ from .cloud import ingest, setup, verify_corpus
 from .config import literal, load_config
 from .db import Database
 from .evidence import verify_index
-from .extraction import extract_pdfs
 from .source import download, read_manifest, write_json
 
 
@@ -38,7 +37,6 @@ def main() -> None:
         "preflight",
         "check-ai",
         "download",
-        "extract-pdfs",
         "setup",
         "ingest",
         "deploy",
@@ -65,8 +63,6 @@ def main() -> None:
                 }
         elif args.command == "download":
             result = {"files": download(config)}
-        elif args.command == "extract-pdfs":
-            result = extract_pdfs(config)
         elif args.command == "setup":
             result = setup(config)
         elif args.command == "check-ai":
