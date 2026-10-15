@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "snow-analytical-search"
+version = "0.1.0"
+description = "A reproducible native Snowflake Analytical Search showcase"
+requires-python = ">=3.11,<3.14"
+dependencies = ["snowflake-connector-python[secure-local-storage]==4.7.5", "pypdf==6.10.0"]
+
+[project.scripts]
+sas = "snow_analytical_search.cli:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8,<10",
+    "ruff>=0.12",
+    "ty",
+    "zensical>=0.0.70",
+]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/snow_analytical_search"]

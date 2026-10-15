@@ -218,3 +218,17 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local corpus, authenticated run evidence, and account configuration
+.local/
+*.local.toml
+
+# Generated documentation and private operational artifacts
+site/
+plans/
+reviews/
+PLAN.md
+*.private.toml
+.env
+.env.*
+!.env.example
