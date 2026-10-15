@@ -1,0 +1,8 @@
+# Copy to ~/.config/snow-analytical-search/demo.toml. Keep personal configuration outside Git.
+connection = "YOUR_CONNECTION"
+expected_account = "YOUR_ACCOUNT_NAME"
+prefix = "SNOW_ANALYTICAL_SEARCH"
+source_commit = "558ffd397eddcfe4da5c85ebc285796b367eb9b2"
+state_dir = "~/.local/state/snow-analytical-search"
+pdf_parser = "snowflake" # Native layout parsing and recursive chunking; requires AI access.
+native_ocr = true # Native OCR supplements only pages with image references.

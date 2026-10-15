@@ -1,0 +1,67 @@
+[project]
+site_name = "Snowflake Analytical Search"
+site_description = "From source documents to answers you can check. Native Snowflake parsing, search and analytical evaluation."
+site_url = "https://miguelelgallo.github.io/snow_analytical_search/"
+repo_url = "https://github.com/MiguelElGallo/snow_analytical_search"
+repo_name = "snow_analytical_search"
+edit_uri = "edit/main/docs/"
+extra_css = ["stylesheets/extra.css"]
+nav = [
+  { "Start here" = "index.md" },
+  { "Tutorial" = [{ "Load your first corpus" = "tutorials/first-run.md" }] },
+  { "How-to guides" = [
+    { "Operate and update" = "how-to/operate.md" },
+    { "Set up with an LLM" = "how-to/llm-setup.md" },
+    { "Troubleshoot" = "how-to/troubleshoot.md" },
+    { "Build and publish the docs" = "how-to/documentation.md" },
+  ] },
+  { "Reference" = [
+    { "Configuration and CLI" = "reference/cli.md" },
+    { "Corpus and tables" = "reference/corpus.md" },
+    { "Questions and evaluation" = "reference/evaluation.md" },
+    { "Capabilities and limits" = "reference/capabilities.md" },
+  ] },
+  { "Explanation" = [
+    { "Architecture and evidence" = "explanation/architecture.md" },
+    { "Access and cost" = "explanation/access-cost.md" },
+  ] },
+]
+
+[project.theme]
+variant = "modern"
+font = false
+language = "en"
+features = [
+  "navigation.tabs", "navigation.sections", "navigation.footer", "navigation.top",
+  "navigation.instant", "navigation.instant.progress", "navigation.tracking",
+  "content.code.copy", "content.code.annotate", "search.highlight", "toc.follow",
+]
+icon.logo = "lucide/files"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "custom"
+accent = "teal"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "custom"
+accent = "teal"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
+
+[project.markdown_extensions]
+admonition = {}
+attr_list = {}
+md_in_html = {}
+pymdownx.details = {}
+pymdownx.highlight.anchor_linenums = true
+pymdownx.inlinehilite = {}
+pymdownx.superfences.custom_fences = [
+  { name = "mermaid", class = "mermaid", format = "pymdownx.superfences.fence_code_format" },
+]
+toc.permalink = true
